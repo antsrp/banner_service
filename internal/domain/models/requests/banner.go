@@ -1,8 +1,8 @@
-package rest
+package requests
 
-import "time"
-
-type BannerContent map[any]any
+import (
+	"github.com/antsrp/banner_service/internal/domain/models"
+)
 
 type UserBannerRequest struct {
 	TagID             int  `json:"tag_id"`
@@ -12,8 +12,8 @@ type UserBannerRequest struct {
 }
 
 type UserBannerResponse struct {
-	Content      BannerContent `json:"content,omitempty"` // undefined structure
-	ErrorMessage string        `json:"error,omitempty"`
+	Content      models.BannerContent `json:"content,omitempty"` // undefined structure
+	ErrorMessage string               `json:"error,omitempty"`
 }
 
 type GetBannersRequest struct {
@@ -22,22 +22,13 @@ type GetBannersRequest struct {
 	Offset int `json:"offset"`
 }
 
-type BannerCommon struct {
-	FeatureID int           `json:"feature_id,omitempty"`
-	TagIDS    []int         `json:"tag_ids,omitempty"`
-	Content   BannerContent `json:"content,omitempty"`
-	IsActive  *bool         `json:"is_active,omitempty"`
-}
-
 type GetBannersResponse struct {
-	BannerCommon
-	CreatedAt    time.Time `json:"created_at,omitempty"`
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
-	ErrorMessage string    `json:"error,omitempty"`
+	models.Banner
+	ErrorMessage string `json:"error,omitempty"`
 }
 
 type CreateBannerRequest struct {
-	BannerCommon
+	models.BannerCommon
 }
 
 type CreateBannerResponse struct {
@@ -46,8 +37,7 @@ type CreateBannerResponse struct {
 }
 
 type UpdateBannerRequest struct {
-	ID int `json:"id"`
-	BannerCommon
+	models.BannerCommon
 }
 
 type UpdateBannerResponse struct {

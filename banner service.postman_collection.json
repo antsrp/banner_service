@@ -1,0 +1,228 @@
+{
+	"info": {
+		"_postman_id": "d69f28cc-d890-44cc-b9e8-7cf82ac36423",
+		"name": "banner service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "29802525",
+		"_collection_link": "https://grey-moon-567991.postman.co/workspace/ctf~9da23023-4cfd-460f-ba78-7686371814da/collection/29802525-d69f28cc-d890-44cc-b9e8-7cf82ac36423?action=share&source=collection_link&creator=29802525"
+	},
+	"item": [
+		{
+			"name": "signin",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"name\": \"user2\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:5000/signin",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"signin"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "signin not a user",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"name\": \"some non-existing user\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:5000/signin",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"signin"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get banners",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:5000/banner?tag_id=1&feature_id=2&limit=5&offset=0",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"banner"
+					],
+					"query": [
+						{
+							"key": "tag_id",
+							"value": "1"
+						},
+						{
+							"key": "feature_id",
+							"value": "2"
+						},
+						{
+							"key": "limit",
+							"value": "5"
+						},
+						{
+							"key": "offset",
+							"value": "0"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "get user banner",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkX2F0IjoxNzEzMTA0MDExLCJpc19hZG1pbiI6ZmFsc2UsInVzZXJuYW1lIjoidXNlcjQifQ.5JEw9u6adNQRXeLpYbzRjiJmoFcIxc_O9Tg5EHR_N8",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "localhost:5000/banner?tag_id=2&feature_id=3&use_last_revision=false",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"banner"
+					],
+					"query": [
+						{
+							"key": "tag_id",
+							"value": "2"
+						},
+						{
+							"key": "feature_id",
+							"value": "3"
+						},
+						{
+							"key": "use_last_revision",
+							"value": "false"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create banner",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkX2F0IjoxNzEzMTE5MzQ2LCJpc19hZG1pbiI6dHJ1ZSwidXNlcm5hbWUiOiJ1c2VyMiJ9.zPxxCyyzIR-RYfrh_YBHRPX8g9O15-tZ30fM4cOD3eM",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"feature_id\": 2,\r\n    \"tag_ids\": [4,5],\r\n    \"content\": {\r\n        \"title\": \"TITLE!\",\r\n        \"url\": \"URL!\",\r\n        \"text\": \"TexT!\"\r\n    },\r\n    \"is_active\": true \r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:5000/banner",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"banner"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "delete banner by id",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkX2F0IjoxNzEzMTAyNDA1LCJpc19hZG1pbiI6dHJ1ZSwidXNlcm5hbWUiOiJ1c2VyNSJ9.E9J7gRYNe9UTPR-QZumeRhDpiWZZhR8F61Qkxq4pbrM",
+							"type": "string"
+						}
+					]
+				},
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "localhost:5000/banner/2",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"banner",
+						"2"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update banner",
+			"request": {
+				"method": "PATCH",
+				"header": [],
+				"url": {
+					"raw": "localhost:5000/banner/2",
+					"host": [
+						"localhost"
+					],
+					"port": "5000",
+					"path": [
+						"banner",
+						"2"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

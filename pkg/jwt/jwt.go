@@ -27,8 +27,9 @@ func NewJwtService(signKey []byte, opts ...JWTOption) Service {
 	return s
 }
 
-func (js Service) Parse(token string) error {
-	jwtToken, err := jwt.Parse(token, func(jwtToken *jwt.Token) (interface{}, error) {
+func (js Service) Parse(token string) (map[string]any, error) {
+	claims := jwt.MapClaims{}
+	jwtToken, err := jwt.ParseWithClaims(token, &claims, func(jwtToken *jwt.Token) (interface{}, error) {
 
 		if _, ok := jwtToken.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", jwtToken.Header["alg"])
@@ -36,13 +37,21 @@ func (js Service) Parse(token string) error {
 		return js.signKey, nil
 	})
 	if err != nil {
-		return fmt.Errorf("can't parse jwt token: %w", err)
+		return nil, fmt.Errorf("can't parse jwt token: %w", err)
 	}
 
-	fmt.Printf("jwt: %#v", jwtToken)
-	//jwtToken.Claims
+	//fmt.Printf("jwt: %#v", jwtToken)
 
-	return nil
+	if !jwtToken.Valid {
+		return nil, ErrInvalidToken
+	}
+
+	m := make(map[string]any, len(claims))
+
+	for k, v := range claims {
+		m[k] = v
+	}
+	return m, nil
 }
 
 func (js Service) NewToken(fields map[string]any) (string, error) {

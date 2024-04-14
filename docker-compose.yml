@@ -1,0 +1,32 @@
+version: '4.23.0'
+
+services:
+  db: 
+    build: 
+     context: db
+    container_name: bs_db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+    ports:
+      - "${DB_PORT}:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DB_USER}", "-d", "${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  redis:
+    image: redis:latest
+    container_name: bs_redis
+    restart: always
+    ports:
+      - "${CACHE_PORT}:6379"
+    volumes:
+      - /path/to/local/dаta:/root/redis
+      - /path/to/local/redis.conf:/usr/local/etc/redis/redis.conf
+    environment:
+      - REDIS_PASSWORD=${CACHE_PASS}
+      - REDIS_PORT=${CACHE_PORT}
+      - REDIS_DATABASES=16
