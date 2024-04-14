@@ -1,64 +1,48 @@
 package rest
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 
-	//"github.com/antsrp/warehouse/internal/models"
+	"github.com/antsrp/banner_service/internal/domain/models"
+	"github.com/antsrp/banner_service/internal/domain/models/requests"
+	"github.com/antsrp/banner_service/internal/service"
 	rs "github.com/antsrp/banner_service/pkg/infrastructure/rest"
 	"github.com/antsrp/banner_service/pkg/logger"
 	"github.com/gin-gonic/gin"
 )
 
-type ResponseError struct {
-	statusCode int
-	realError  error
-	Message    string `json:"message"`
-}
-
-func (r ResponseError) Error() string {
-	return r.Message
-}
-
 type Handler struct {
-	engine   *gin.Engine
-	settings rs.Settings
-	logger   logger.Logger
+	engine        *gin.Engine
+	settings      rs.Settings
+	logger        logger.Logger
+	bannerService service.BannerServicer
+	auth          authHandler
 }
 
-func NewHandler(settings rs.Settings, logger logger.Logger) Handler {
+func NewHandler(settings rs.Settings, logger logger.Logger, bs service.BannerServicer, us service.UserStorager) Handler {
 	h := Handler{
-		engine:   gin.Default(),
-		settings: settings,
-		logger:   logger,
+		engine:        gin.Default(),
+		settings:      settings,
+		logger:        logger,
+		auth:          newAuthHandler(us, logger),
+		bannerService: bs,
 	}
-	h.engine.Use(h.errorHandler())
 	h.routes()
 	return h
 }
 
-func (h Handler) errorHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-		for _, err := range c.Errors {
-			switch e := err.Err.(type) {
-			case ResponseError:
-				c.AbortWithStatusJSON(e.statusCode, e)
-				h.logger.Info(fmt.Sprintf("error within request: %v", e.realError.Error()))
-			default:
-				c.AbortWithStatusJSON(http.StatusInternalServerError, ResponseError{Message: "Service Unavailable"})
-				h.logger.Error(fmt.Sprintf("internal error: %v", e.Error()))
-			}
-		}
-	}
-}
-
 func (h Handler) routes() {
-	h.engine.GET("/user_banner", h.userBanner)
-	h.engine.GET("/banner", h.getBanner)
-	h.engine.POST("/banner", h.addBanner)
-	h.engine.PATCH("/banner/:id", h.updateBanner)
-	h.engine.DELETE("/banner/:id", h.deleteBanner)
+	group := h.engine.Group("/")
+	group.GET("/user_banner", h.auth.authRequired, h.userBanner)
+	group.GET("/banner", h.auth.adminAuthRequired, h.getBanner)
+	group.POST("/banner", h.auth.adminAuthRequired, h.addBanner)
+	group.PATCH("/banner/:id", h.auth.adminAuthRequired, h.updateBanner)
+	group.DELETE("/banner/:id", h.auth.adminAuthRequired, h.deleteBanner)
+
+	group.POST("/signin", h.auth.signIn)
 }
 
 func (h Handler) Run() error {
@@ -133,10 +117,54 @@ summary: Получение баннера для пользователя
 	              type: string
 */
 func (h Handler) userBanner(c *gin.Context) { // GET /user_banner
-	_ = c.GetHeader("token") // parse token
-	c.GetQuery("tag_id")
-	c.GetQuery("feature_id")
-	c.GetQuery("use_last_revision") // not required
+	var req requests.UserBannerRequest
+	if tagId, ok := c.GetQuery("tag_id"); !ok {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "tag id is not set"})
+		return
+	} else {
+		if val, err := strconv.Atoi(tagId); err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "tag id is not an integer type"})
+			return
+		} else {
+			req.TagID = val
+		}
+	}
+	if featureId, ok := c.GetQuery("feature_id"); !ok {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "feature id is not set"})
+		return
+	} else {
+		if val, err := strconv.Atoi(featureId); err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "feature id is not an integer type"})
+			return
+		} else {
+			req.FeatureID = val
+		}
+	}
+	if useLR, ok := c.GetQuery("use_last_revision"); ok { // not required
+		if val, err := strconv.ParseBool(useLR); err != nil {
+			h.logger.Info("can't parse use_last_revision parameter from %s: not a boolean type", useLR)
+		} else {
+			req.IsUseLastRevision = val
+		}
+	}
+	data, _ := c.Get(authusertag)
+	user := data.(models.User)
+
+	banner, err := h.bannerService.GetOne(req, user.Name)
+	if err != nil {
+		h.logger.Error("can't get banner: %v", err.Cause().Error())
+		if errors.Is(err.Cause(), service.ErrBannerNotFound) {
+			c.AbortWithStatus(http.StatusNotFound)
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": service.ErrDefaultInternalError.Error()})
+		}
+		return
+	}
+	if !(*banner.IsActive) && !user.IsAdmin {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	c.JSON(http.StatusOK, banner)
 }
 
 /*
@@ -225,7 +253,44 @@ summary: Получение всех баннеров c фильтрацией �
 	              type: string
 */
 func (h Handler) getBanner(c *gin.Context) { // GET /banner
+	var req requests.GetBannersRequest
 
+	if tagId, ok := c.GetQuery("tag_id"); ok {
+		if val, err := strconv.Atoi(tagId); err != nil {
+			h.logger.Info("can't parse tag_id: %v", err.Error())
+		} else {
+			req.TagID = val
+		}
+	}
+	if featureId, ok := c.GetQuery("feature_id"); ok {
+		if val, err := strconv.Atoi(featureId); err != nil {
+			h.logger.Info("can't parse feature_id: %v", err.Error())
+		} else {
+			req.FeatureID = val
+		}
+	}
+	if limit, ok := c.GetQuery("limit"); ok {
+		if val, err := strconv.Atoi(limit); err != nil {
+			h.logger.Info("can't parse limit: %v", err.Error())
+		} else {
+			req.Limit = val
+		}
+	}
+	if offset, ok := c.GetQuery("offset"); ok {
+		if val, err := strconv.Atoi(offset); err != nil {
+			h.logger.Info("can't parse limit: %v", err.Error())
+		} else {
+			req.Offset = val
+		}
+	}
+	banners, err := h.bannerService.Get(req)
+	if err != nil {
+		h.logger.Error("can't get banners: %v", err.Cause().Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, service.ErrDefaultInternalError.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, banners)
 }
 
 /*
@@ -296,7 +361,38 @@ summary: Создание нового баннера
 	              type: string
 */
 func (h Handler) addBanner(c *gin.Context) { // POST /banner
+	var req requests.CreateBannerRequest
 
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("can't parse request body from json: %v", err.Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, service.ErrDefaultInternalError.Error())
+		return
+	}
+	if req.Content == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "field content is empty"})
+		return
+	}
+	if req.IsActive == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "field is_active is not set"})
+		return
+	}
+	if req.FeatureID <= 0 {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "field feature_id is not set or set wrong"})
+		return
+	}
+	if req.TagIDS == nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "field tag_ids is not set"})
+		return
+	}
+
+	banner, err := h.bannerService.Create(req)
+	if err != nil {
+		h.logger.Error("can't parse request body from json: %v", err.Cause().Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, service.ErrDefaultInternalError.Error())
+		return
+	}
+
+	c.JSON(http.StatusCreated, requests.CreateBannerResponse{BannerID: banner.ID})
 }
 
 /*
@@ -371,7 +467,32 @@ summary: Обновление содержимого баннера
 	              type: string
 */
 func (h Handler) updateBanner(c *gin.Context) { // PATCH /banner/{id}
+	var req requests.UpdateBannerRequest
 
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("can't parse request body from json: %v", err.Error())
+		c.AbortWithStatusJSON(http.StatusInternalServerError, service.ErrDefaultInternalError.Error())
+		return
+	}
+	if id, err := strconv.Atoi(c.Param("id")); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "id parameter is not an integer type"})
+		return
+	} else {
+		req.ID = id
+	}
+
+	err := h.bannerService.Update(req)
+	if err != nil {
+		h.logger.Error("can't update banner in database: %v", err.Cause().Error())
+		if errors.Is(err.Cause(), service.ErrBannerNotFound) {
+			c.AbortWithStatus(http.StatusNotFound)
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, service.ErrDefaultInternalError.Error())
+		}
+		return
+	}
+
+	c.Status(http.StatusOK)
 }
 
 /*
@@ -419,32 +540,23 @@ summary: Удаление баннера по идентификатору
 	              type: string
 */
 func (h Handler) deleteBanner(c *gin.Context) { // DELETE /banner/{id}
+	var req requests.DeleteBannerRequest
 
-}
-
-/*func (h Handler) reserveGoods(c *gin.Context) { // POST ReserveGoods ([]models.Reserve)
-	var reserves []models.Reserve
-	if err := c.ShouldBindJSON(&reserves); err != nil {
-		c.Error(ResponseError{realError: err, statusCode: http.StatusBadRequest, Message: "bad request: input should be json"})
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "id parameter is not an integer type"})
 		return
 	}
-	c.JSON(http.StatusOK, reserves)
-}
+	req.ID = id
 
-func (h Handler) releaseGoods(c *gin.Context) { // POST ReleaseGoods ([]models.Release)
-	var releases []models.Release
-	if err := c.ShouldBindJSON(&releases); err != nil {
-		c.Error(ResponseError{realError: err, statusCode: http.StatusBadRequest, Message: "bad request: input should be json"})
+	if err := h.bannerService.Delete(req); err != nil {
+		if errors.Is(err.Cause(), service.ErrBannerNotFound) {
+			c.AbortWithStatus(http.StatusNotFound)
+		} else {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, service.ErrDefaultInternalError.Error())
+		}
 		return
 	}
-	c.JSON(http.StatusOK, nil)
-}
 
-func (h Handler) getGoodsOfWarehouse(c *gin.Context) { // POST GetGoodsOfWarehouse ([]models.GetGoodsRequest)
-	var ggrs []models.GetGoodsRequest
-	if err := c.ShouldBindJSON(&ggrs); err != nil {
-		c.Error(ResponseError{realError: err, statusCode: http.StatusBadRequest, Message: "bad request: input should be json"})
-		return
-	}
-	c.JSON(http.StatusOK, nil)
-} */
+	c.Status(http.StatusNoContent)
+}

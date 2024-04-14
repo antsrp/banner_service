@@ -24,7 +24,8 @@ CREATE TABLE features (
 
 CREATE TABLE tokens (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
+    user_id INTEGER UNIQUE REFERENCES users(id),
+    token VARCHAR(500) UNIQUE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -53,6 +54,14 @@ INSERT INTO users_tags (user_id, tag_id) VALUES
 (2, 7),
 (3, 1),
 (4, 2),
-(5, 2);
-(5, 6);
+(5, 2),
+(5, 6),
 (5, 8);
+
+INSERT INTO features (description) VALUES
+('desc1'),
+('some desc'),
+('desc2'),
+('lol'),
+('desc3'),
+('kek');
